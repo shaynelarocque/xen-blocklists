@@ -1,0 +1,77 @@
+name: Build lists
+
+on:
+  schedule:
+    - cron: "23 7 * * 1" # Mondays, 07:23 UTC
+  workflow_dispatch:
+    inputs:
+      allow_big_change:
+        description: Publish even if a list grew or shrank by more than a third
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # the release that keeps each build
+  pages: write
+  id-token: write
+
+concurrency:
+  group: lists
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # The oldest macOS runner: its WebKit, closest to iOS 18's, decides
+    # which hiding selectors parse.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            converter/target
+          key: converter-${{ runner.os }}-${{ hashFiles('converter/Cargo.lock', 'converter/src/**') }}
+
+      - name: Build the converter
+        run: cargo build --release --locked --manifest-path converter/Cargo.toml
+
+      - name: Build the lists
+        run: >-
+          python3 build.py
+          --previous https://shaynelarocque.github.io/xen-blocklists/manifest.json
+          ${{ inputs.allow_big_change && '--allow-big-change' || '' }}
+
+      - name: Sign the manifest
+        env:
+          XEN_LISTS_SIGNING_KEY: ${{ secrets.XEN_LISTS_SIGNING_KEY }}
+        run: |
+          swiftc -O tools/sign.swift -o work/bin/sign
+          work/bin/sign site/manifest.json site/manifest.sig
+
+      - name: Keep this build as a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="lists-$(date -u +%Y%m%d-%H%M)"
+          tar -czf work/site.tar.gz -C site .
+          gh release create "$tag" work/site.tar.gz --title "$tag" \
+            --notes "The lists published on $(date -u +%Y-%m-%d). Put them back with the Roll back workflow."
+          # Half a year of builds is plenty to roll back to.
+          gh release list --limit 200 --json tagName --jq '.[26:][].tagName' |
+            while read -r old; do gh release delete "$old" --yes --cleanup-tag; done
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5

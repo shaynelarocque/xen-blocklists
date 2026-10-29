@@ -1,0 +1,73 @@
+{
+  "lists": [
+    {
+      "name": "easylist",
+      "group": "adsAndTrackers",
+      "sharedExceptions": true,
+      "sources": [
+        { "url": "https://easylist.to/easylist/easylist.txt" }
+      ]
+    },
+    {
+      "name": "easyprivacy",
+      "group": "adsAndTrackers",
+      "sharedExceptions": true,
+      "sources": [
+        { "url": "https://easylist.to/easylist/easyprivacy.txt" }
+      ]
+    },
+    {
+      "name": "ublock-filters",
+      "group": "adsAndTrackers",
+      "sharedExceptions": true,
+      "sources": [
+        { "url": "https://ublockorigin.github.io/uAssets/filters/filters.txt" },
+        { "url": "https://ublockorigin.github.io/uAssets/filters/badware.txt" },
+        { "url": "https://ublockorigin.github.io/uAssets/filters/privacy.txt" },
+        { "url": "https://ublockorigin.github.io/uAssets/filters/quick-fixes.txt" },
+        { "url": "https://ublockorigin.github.io/uAssets/filters/unbreak.txt" }
+      ]
+    },
+    {
+      "name": "cookie-notices",
+      "group": "cookieNotices",
+      "sources": [
+        { "url": "https://secure.fanboy.co.nz/fanboy-cookiemonster.txt" },
+        { "url": "https://filters.adtidy.org/extension/ublock/filters/18.txt" },
+        { "url": "https://ublockorigin.github.io/uAssets/filters/annoyances-cookies.txt" }
+      ]
+    },
+    {
+      "name": "social-widgets",
+      "group": "adsAndTrackers",
+      "sources": [
+        { "url": "https://easylist.to/easylist/fanboy-social.txt" },
+        { "url": "https://filters.adtidy.org/extension/ublock/filters/4.txt" },
+        { "url": "https://secure.fanboy.co.nz/fanboy-antifacebook.txt" }
+      ]
+    },
+    {
+      "name": "annoyances",
+      "group": "adsAndTrackers",
+      "sources": [
+        {
+          "url": "https://easylist.to/easylist/fanboy-annoyance.txt",
+          "comment": "Its cookie and social parts are lists of their own here, the cookie part under its own switch",
+          "dropSections": ["easylist_cookie/", "fanboy-addon/fanboy_social_"]
+        },
+        { "url": "https://filters.adtidy.org/extension/ublock/filters/19.txt" },
+        { "url": "https://filters.adtidy.org/extension/ublock/filters/20.txt" },
+        { "url": "https://filters.adtidy.org/extension/ublock/filters/21.txt" },
+        { "url": "https://filters.adtidy.org/extension/ublock/filters/22.txt" },
+        { "url": "https://ublockorigin.github.io/uAssets/filters/annoyances-others.txt" }
+      ]
+    },
+    {
+      "name": "other-blocklists",
+      "group": "adsAndTrackers",
+      "sources": [
+        { "url": "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=adblockplus&showintro=1&mimetype=plaintext" }
+      ]
+    }
+  ]
+}

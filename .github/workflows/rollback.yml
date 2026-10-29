@@ -1,0 +1,57 @@
+name: Roll back
+
+# Puts an earlier build's lists back, under a new serial so Xen takes them.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: The release to put back (lists-YYYYMMDD-HHMM)
+        required: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: lists
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch the build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p work site
+          gh release download "${{ inputs.release }}" --pattern site.tar.gz --dir work
+          tar -xzf work/site.tar.gz -C site
+          rm -f site/manifest.sig
+
+      - name: Number it anew and sign it
+        env:
+          XEN_LISTS_SIGNING_KEY: ${{ secrets.XEN_LISTS_SIGNING_KEY }}
+        run: |
+          python3 build.py --reissue site/manifest.json
+          mkdir -p work/bin
+          swiftc -O tools/sign.swift -o work/bin/sign
+          work/bin/sign site/manifest.json site/manifest.sig
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5

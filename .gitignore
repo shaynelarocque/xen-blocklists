@@ -1,0 +1,5 @@
+/work/
+/site/
+/converter/target/
+.DS_Store
+__pycache__/
