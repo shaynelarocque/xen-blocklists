@@ -13,7 +13,7 @@ The content-blocker lists [Xen Browser](https://shaynelarocque.com/xen) uses to 
 [`build.py`](build.py) reads [`sources.json`](sources.json) and, for each of Xen's lists:
 
 1. **Fetches** its filter lists. It follows `!#include` and `!#if` the way uBlock Origin does for Safari on a phone.
-2. **Converts the network filters** with Brave's [adblock-rust](https://github.com/brave/adblock-rust) ([`converter/`](converter)). It leaves out what WebKit can't do: scriptlets, redirects, `$csp`, `$removeparam`.
+2. **Converts the network filters** with Brave's [adblock-rust](https://github.com/brave/adblock-rust) ([`converter/`](converter)). It leaves out what WebKit can't do: scriptlets, redirects, `$csp`, `$removeparam`. The converter also puts back Adblock Plus's `^` separator, which adblock-rust's regexes lose: without it, `||ads.com^` would also match `ads.community.org`, and a rule with `^` in the middle would never match at all.
 3. **Converts the hiding filters itself**, with their exceptions. `site#@#.ad` lifts `##.ad` on that site, and `@@||site^$generichide` switches generic hiding off there. WebKit has no exception for a hiding rule, so an exception narrows the rule's domains instead.
 4. **Checks every selector with WebKit** ([`tools/selector-check.swift`](tools/selector-check.swift)) and leaves out the ones it can't parse. WebKit drops a whole rule for one bad selector.
 5. **Removes duplicates and splits the list into chunks** of at most 50,000 rules. A rule a list earlier on the same switch already has is dropped. Every chunk of EasyList, EasyPrivacy and uBlock filters ends with all three lists' network exceptions, because WebKit only applies an exception to earlier rules in the same list.

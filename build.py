@@ -9,7 +9,8 @@ Reads sources.json and, for each of Xen's lists:
    does, for Safari on a phone. A source can drop sections it shares with
    another list (Fanboy's Annoyance List carries the cookie list inside it).
 2. Converts the network filters with Brave's adblock-rust (converter/), which
-   leaves out what WebKit cannot do: scriptlets, redirects, $csp, $removeparam.
+   leaves out what WebKit cannot do: scriptlets, redirects, $csp, $removeparam,
+   and puts back the `^` separators its regexes lose.
 3. Converts the hiding filters here, honouring their exceptions: `site#@#.ad`
    lifts `##.ad` on that site and `#@#.ad` lifts it everywhere. WebKit has no
    exception for a hiding rule of its own, so an exception narrows the rule's

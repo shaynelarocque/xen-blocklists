@@ -4,17 +4,36 @@
 //!     xen-convert [--hosts] <list.txt> [[--standard|--hosts] <list.txt>]...
 //!
 //! All the lists given are read as one set, so a `$badfilter` in one switches
-//! off its rule in another. Prints `{"rules": [...], "filtersUsed": n}`.
-//! Hiding rules are left to `build.py`, which also honours their exceptions.
+//! off its rule in another. Prints `{"rules": [...], "filtersUsed": n}`, the
+//! blocks first and the exceptions after them. Hiding rules are left to
+//! `build.py`, which also honours their exceptions.
 
-use adblock::content_blocking::{ignore_previous_fp_documents, CbRule};
-use adblock::lists::{FilterFormat, FilterSet, ParseOptions, RuleTypes};
+use adblock::content_blocking::{CbRule, CbRuleEquivalent, CbType};
+use adblock::lists::{parse_filters, FilterFormat, ParseOptions, RuleTypes};
+use std::collections::HashSet;
 use std::{env, fs, process};
 
+/// Adblock Plus's `^`: one character that is not a letter, a digit or one
+/// of `_-.%`, or the end of the address.
+const SEPARATOR: &str = "[^-_.%a-z0-9]";
+
+/// Puts back what adblock-rust's regexes lose of `^`. It escapes a `^`
+/// inside a filter to a literal caret no address has, so the rule never
+/// matches (`||googleapis.com^*/gen_204?`), and it drops a final one, so
+/// `||ads.com^` also took `ads.community.org`.
+fn with_separators(url_filter: &str, raw: &str, hosts_line: bool) -> String {
+    let mut fixed = url_filter.replace("\\^", SEPARATOR);
+    let pattern = raw.strip_prefix("@@").unwrap_or(raw);
+    let pattern = pattern.rfind('$').map_or(pattern, |options| &pattern[..options]);
+    if (hosts_line || pattern.ends_with('^')) && !fixed.ends_with('$') && !fixed.ends_with(".*") {
+        fixed.push_str(&format!("({SEPARATOR}.*)?$"));
+    }
+    fixed
+}
+
 fn main() {
-    let mut set = FilterSet::new(true);
+    let mut texts = vec![];
     let mut format = FilterFormat::Standard;
-    let mut lists = 0;
     for arg in env::args().skip(1) {
         match arg.as_str() {
             "--hosts" => format = FilterFormat::Hosts,
@@ -24,30 +43,45 @@ fn main() {
                     eprintln!("xen-convert: {path}: {error}");
                     process::exit(1);
                 });
-                set.add_filter_list(
-                    text,
-                    ParseOptions {
-                        format,
-                        rule_types: RuleTypes::NetworkOnly,
-                        ..Default::default()
-                    },
-                );
-                lists += 1;
+                texts.push((text, format));
             }
         }
     }
-    if lists == 0 {
+    if texts.is_empty() {
         eprintln!("usage: xen-convert [--hosts] <list.txt>...");
         process::exit(2);
     }
 
-    let (rules, used) = set.into_content_blocking().expect("a debug FilterSet converts");
-    // adblock-rust ends the set with an exception for every first-party page,
-    // so a listed host's own pages still load. Xen's lists have always
-    // blocked those pages, malware hosts above all, and keep doing so.
-    let catch_all = ignore_previous_fp_documents();
-    let rules: Vec<CbRule> = rules.into_iter().filter(|rule| *rule != catch_all).collect();
+    let mut filters = vec![];
+    for (text, format) in &texts {
+        let options = ParseOptions { format: *format, rule_types: RuleTypes::NetworkOnly, ..Default::default() };
+        let (network, _) = parse_filters(text.lines(), true, options);
+        filters.extend(network.into_iter().map(|filter| (filter, matches!(format, FilterFormat::Hosts))));
+    }
+    let badfiltered: HashSet<_> = filters.iter().filter(|(f, _)| f.is_badfilter()).map(|(f, _)| f.get_id()).collect();
 
-    let out = serde_json::json!({ "rules": rules, "filtersUsed": used.len() });
+    let (mut blocks, mut exceptions): (Vec<CbRule>, Vec<CbRule>) = (vec![], vec![]);
+    let mut used = 0;
+    for (filter, hosts_line) in filters {
+        if filter.is_badfilter() || badfiltered.contains(&filter.get_id()) {
+            continue;
+        }
+        let raw = filter.raw_line.as_deref().unwrap_or_default().to_string();
+        let Ok(equivalent) = CbRuleEquivalent::try_from(filter) else { continue };
+        used += 1;
+        for mut rule in equivalent {
+            rule.trigger.url_filter = with_separators(&rule.trigger.url_filter, &raw, hosts_line);
+            match rule.action.typ {
+                CbType::IgnorePreviousRules => exceptions.push(rule),
+                _ => blocks.push(rule),
+            }
+        }
+    }
+    // adblock-rust's own conversion ends with an exception for every
+    // first-party page, so a listed host's own pages still load. Xen's lists
+    // have always blocked those pages, malware hosts above all, and still do.
+    blocks.extend(exceptions);
+
+    let out = serde_json::json!({ "rules": blocks, "filtersUsed": used });
     println!("{out}");
 }
